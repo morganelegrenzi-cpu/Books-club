@@ -1,0 +1,14 @@
+{
+  "name": "Book's Club",
+  "short_name": "Book's Club",
+  "description": "Suivi de lecture personnel : PAL, sagas, livres lus, objectifs et streak.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ff3d68",
+  "theme_color": "#ff3d68",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
