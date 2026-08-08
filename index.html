@@ -389,17 +389,36 @@ const TIERS = [
   {n:1, name:"Premier livre", em:"🌱"},
   {n:5, name:"Petit lecteur", em:"📖"},
   {n:10, name:"Lecteur confirmé", em:"📚"},
+  {n:15, name:"Page tourneuse", em:"🍃"},
+  {n:20, name:"Habituée de la lecture", em:"🕯️"},
   {n:25, name:"Dévoreur de pages", em:"🔥"},
+  {n:30, name:"Lectrice assidue", em:"🌟"},
+  {n:40, name:"Marathonienne des mots", em:"🏃‍♀️"},
   {n:50, name:"Rat de bibliothèque", em:"🐭"},
+  {n:60, name:"Collectionneuse d'histoires", em:"🗂️"},
   {n:75, name:"Bookworm certifié", em:"🐛"},
   {n:100, name:"Centurion des livres", em:"💯"},
+  {n:125, name:"Passionnée de lecture", em:"💫"},
   {n:150, name:"Érudit(e)", em:"🎓"},
+  {n:175, name:"Gardienne des récits", em:"📜"},
   {n:200, name:"Bibliophile", em:"📕"},
+  {n:250, name:"Exploratrice littéraire", em:"🧭"},
   {n:300, name:"Maître des étagères", em:"🏆"},
+  {n:350, name:"Chasseuse d'histoires", em:"🎯"},
+  {n:400, name:"Encyclopédie vivante", em:"🧠"},
+  {n:450, name:"Voyageuse entre les pages", em:"🚂"},
   {n:500, name:"Légende littéraire", em:"⭐"},
+  {n:600, name:"Grande lectrice", em:"🌙"},
+  {n:700, name:"Vétérante des mots", em:"⚔️"},
   {n:750, name:"Sage des mots", em:"🧙"},
+  {n:800, name:"Oracle des livres", em:"🔮"},
+  {n:900, name:"Reine des étagères", em:"👸"},
   {n:1000, name:"Mille et un livres", em:"👑"},
+  {n:1200, name:"Bibliothèque ambulante", em:"🚶‍♀️"},
+  {n:1400, name:"Gardienne du savoir", em:"🛡️"},
   {n:1500, name:"Archiviste suprême", em:"🗝️"},
+  {n:1600, name:"Mythe vivant", em:"🐉"},
+  {n:1800, name:"Divinité littéraire", em:"🌌"},
   {n:2000, name:"Immortel(le) des lettres", em:"✨"},
 ];
 
@@ -411,7 +430,7 @@ function defaultData(){
     books: [],   // standalone books: {id,title,author,pages,genre,status:'pal'|'reading'|'lu',priority,dateAdded,dateStarted,dateFinished,rating,notes,cover}
     sagas: [],   // {id,name,genre,cover,tomes:[{id,title,pages,status:'a_lire'|'en_cours'|'lu',dateFinished,rating}]}
     dailyLog: {},// 'YYYY-MM-DD': {read:bool, bookLabel:string, pages:number, note:string}
-    settings: { yearlyGoals:{}, darkMode:false },
+    settings: { yearlyGoals:{}, darkMode:false, customGenres:[] },
     meta: { longestStreak:0 }
   };
 }
@@ -429,10 +448,10 @@ function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); }
 
 /* ============ DERIVED HELPERS ============ */
 function allFinishedItems(){
-  // returns array of {title, pages, dateFinished, rating, genre}
+  // returns array of {refType, id, sagaId, title, pages, dateFinished, rating, genre}
   const out = [];
-  DATA.books.filter(b=>b.status==='lu' && b.dateFinished).forEach(b=> out.push({title:b.title, pages:+b.pages||0, dateFinished:b.dateFinished, rating:b.rating||0, genre:b.genre||'Autre'}));
-  DATA.sagas.forEach(s=> s.tomes.filter(t=>t.status==='lu' && t.dateFinished).forEach(t=> out.push({title: s.name+' — '+t.title, pages:+t.pages||0, dateFinished:t.dateFinished, rating:t.rating||0, genre:s.genre||'Autre'})));
+  DATA.books.filter(b=>b.status==='lu' && b.dateFinished).forEach(b=> out.push({refType:'book', id:b.id, sagaId:null, title:b.title, pages:+b.pages||0, dateFinished:b.dateFinished, rating:b.rating||0, genre:b.genre||'Autre'}));
+  DATA.sagas.forEach(s=> s.tomes.filter(t=>t.status==='lu' && t.dateFinished).forEach(t=> out.push({refType:'tome', id:t.id, sagaId:s.id, title: s.name+' — '+t.title, pages:+t.pages||0, dateFinished:t.dateFinished, rating:t.rating||0, genre:s.genre||'Autre'})));
   return out;
 }
 function lifetimeCount(){ return allFinishedItems().length; }
@@ -519,9 +538,42 @@ function wireStarInput(id, initial, onChange){
     });
   });
 }
-function genreOptions(selected){
-  return GENRES.map(g=>`<option value="${g}" ${g===selected?'selected':''}>${g}</option>`).join('');
+function allGenres(){
+  const custom = DATA.settings.customGenres || [];
+  return [...GENRES, ...custom];
 }
+function genreOptions(selected){
+  return allGenres().map(g=>`<option value="${g}" ${g===selected?'selected':''}>${g}</option>`).join('')
+    + `<option value="__add__">➕ Ajouter un genre...</option>`;
+}
+function genreFieldHTML(id, selected){
+  return `<select id="${id}" onchange="onGenreSelectChange('${id}')">${genreOptions(selected)}</select>
+  <div id="${id}_newWrap" style="display:none; margin-top:8px;">
+    <div style="display:flex; gap:8px;">
+      <input type="text" id="${id}_new" placeholder="Nom du nouveau genre" style="flex:1;">
+      <button type="button" class="btn btn-soft btn-sm" onclick="confirmNewGenre('${id}')">OK</button>
+    </div>
+  </div>`;
+}
+function onGenreSelectChange(id){
+  const sel = document.getElementById(id);
+  const wrap = document.getElementById(id+'_newWrap');
+  if(!sel || !wrap) return;
+  wrap.style.display = sel.value==='__add__' ? 'block' : 'none';
+}
+window.onGenreSelectChange = onGenreSelectChange;
+function confirmNewGenre(id){
+  const input = document.getElementById(id+'_new');
+  const name = input.value.trim();
+  if(!name) return;
+  if(!DATA.settings.customGenres) DATA.settings.customGenres = [];
+  if(!allGenres().includes(name)){ DATA.settings.customGenres.push(name); save(); }
+  const sel = document.getElementById(id);
+  sel.innerHTML = genreOptions(name);
+  document.getElementById(id+'_newWrap').style.display = 'none';
+  input.value = '';
+}
+window.confirmNewGenre = confirmNewGenre;
 
 /* ============ RENDER: JOURNAL ============ */
 let calViewDate = new Date();
@@ -752,10 +804,11 @@ function renderPAL(){
   }
 
   const pal = DATA.books.filter(b=>b.status==='pal').sort((a,b)=>(b.priority||0)-(a.priority||0));
-  document.getElementById('palCount').textContent = pal.length;
+  const upcoming = upcomingSagaTomes();
+  document.getElementById('palCount').textContent = pal.length + upcoming.length;
   const list = document.getElementById('palList');
-  if(pal.length===0){ list.innerHTML = `<div class="empty-state"><span class="em">📚</span>Ta pile à lire est vide.<br>Ajoute un livre avec le bouton +</div>`; return; }
-  list.innerHTML = pal.map(b=>`
+  if(pal.length===0 && upcoming.length===0){ list.innerHTML = `<div class="empty-state"><span class="em">📚</span>Ta pile à lire est vide.<br>Ajoute un livre avec le bouton +</div>`; return; }
+  let html = pal.map(b=>`
     <div class="book-item">
       <div class="book-cover">${b.cover||'📕'}</div>
       <div class="book-info">
@@ -769,6 +822,33 @@ function renderPAL(){
       </div>
     </div>
   `).join('');
+  html += upcoming.map(u=>`
+    <div class="book-item">
+      <div class="book-cover">🔄</div>
+      <div class="book-info">
+        <div class="t">${escapeHtml(u.title)}</div>
+        <div class="a">${escapeHtml(u.author||'')}</div>
+        <div class="book-meta"><span class="pill">Saga</span>${u.genre?'<span class="pill">'+u.genre+'</span>':''}${u.pages?u.pages+' pages':''}</div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <button class="btn btn-soft btn-sm" onclick="cycleTome('${u.sagaId}','${u.tomeId}')">Commencer</button>
+        <span class="link-del" onclick="deleteTome('${u.sagaId}','${u.tomeId}')" style="text-align:center;">Suppr.</span>
+      </div>
+    </div>
+  `).join('');
+  list.innerHTML = html;
+}
+function sagaIsStarted(s){ return s.tomes.some(t=> t.status==='en_cours' || t.status==='lu'); }
+function upcomingSagaTomes(){
+  const rows = [];
+  DATA.sagas.forEach(s=>{
+    if((s.status||'encours')==='terminee') return;
+    if(sagaIsStarted(s)) return;
+    s.tomes.filter(t=>t.status==='a_lire').forEach(t=>{
+      rows.push({ sagaId: s.id, tomeId: t.id, title: s.name+' — '+t.title, author: s.author||'', genre: s.genre||'', pages: t.pages||0 });
+    });
+  });
+  return rows;
 }
 function startReading(id){
   const b = DATA.books.find(x=>x.id===id); if(!b) return;
@@ -867,16 +947,19 @@ function sagaCardHTML(s){
 }
 function renderSagas(){
   const list = document.getElementById('sagasList');
-  const active = DATA.sagas.filter(s=> (s.status||'encours') !== 'terminee');
+  // Une saga apparaît ici seulement si elle est activement en cours de lecture (un tome commencé),
+  // ou si elle n'a encore aucun tome (pour pouvoir en ajouter). Les sagas pas encore commencées
+  // affichent leurs tomes directement dans la PAL, tant qu'aucun tome n'a été démarré.
+  const active = DATA.sagas.filter(s=> (s.status||'encours') !== 'terminee' && (sagaIsStarted(s) || s.tomes.length===0));
   const finished = DATA.sagas.filter(s=> (s.status||'encours') === 'terminee');
 
   if(active.length===0 && finished.length===0){
-    list.innerHTML = `<div class="card"><div class="empty-state"><span class="em">🔄</span>Aucune saga en cours.<br>Ajoute-en une avec le bouton +</div></div>`;
+    list.innerHTML = `<div class="card"><div class="empty-state"><span class="em">🔄</span>Aucune saga en cours de lecture.<br>Les sagas pas encore commencées apparaissent dans ta PAL.</div></div>`;
     return;
   }
   let html = active.length
     ? active.map(sagaCardHTML).join('')
-    : `<div class="card"><div class="empty-state"><span class="em">🔄</span>Aucune saga en cours pour le moment.</div></div>`;
+    : `<div class="card"><div class="empty-state"><span class="em">🔄</span>Aucune saga en cours de lecture.<br>Les sagas pas encore commencées apparaissent dans ta PAL.</div></div>`;
   if(finished.length){
     html += `<details style="margin-top:6px;"><summary style="cursor:pointer; font-weight:700; color:var(--text-dim); padding:10px 4px;">Sagas terminées (${finished.length})</summary>${finished.map(sagaCardHTML).join('')}</details>`;
   }
@@ -937,16 +1020,66 @@ function renderLus(query){
   const list = document.getElementById('lusList');
   if(filtered.length===0){ list.innerHTML = `<div class="empty-state"><span class="em">✅</span>Aucun livre lu pour l'instant.</div>`; return; }
   list.innerHTML = filtered.map(i=>`
-    <div class="book-item">
+    <div class="book-item" style="cursor:pointer;" onclick="openEditFinished('${i.refType}','${i.id}',${i.sagaId? `'${i.sagaId}'`:'null'})">
       <div class="book-cover">📗</div>
       <div class="book-info">
         <div class="t">${escapeHtml(i.title)}</div>
         <div class="book-meta">${i.genre?'<span class="pill">'+i.genre+'</span>':''}${i.pages?i.pages+' pages · ':''}Terminé le ${fmtDate(i.dateFinished)}</div>
         ${i.rating? '<div class="stars">'+'★'.repeat(i.rating)+'☆'.repeat(5-i.rating)+'</div>':''}
       </div>
+      <span style="color:var(--text-dim); font-size:16px;">✏️</span>
     </div>
   `).join('');
 }
+function openEditFinished(refType, id, sagaId){
+  let obj, sagaCtx = null;
+  if(refType==='book'){
+    obj = DATA.books.find(b=>b.id===id); if(!obj) return;
+  } else {
+    sagaCtx = DATA.sagas.find(s=>s.id===sagaId); if(!sagaCtx) return;
+    obj = sagaCtx.tomes.find(t=>t.id===id); if(!obj) return;
+  }
+  const isTome = refType==='tome';
+  openModal(`
+    <h2>✏️ Modifier</h2>
+    ${isTome? `<div class="book-meta" style="margin-bottom:10px;">Tome de la saga <b>${escapeHtml(sagaCtx.name)}</b></div>`:''}
+    <div class="field"><label>${isTome?'Titre du tome':'Titre'} *</label><input type="text" id="efTitle" value="${escapeAttr(obj.title)}"></div>
+    ${!isTome? `<div class="field"><label>Auteur</label><input type="text" id="efAuthor" value="${escapeAttr(obj.author||'')}"></div>
+    <div class="field"><label>Genre</label>${genreFieldHTML('efGenre', obj.genre)}</div>` : ''}
+    <div class="field"><label>Pages</label><input type="number" id="efPages" min="0" value="${obj.pages||''}"></div>
+    <div class="field"><label>Date de fin de lecture</label><input type="date" id="efDate" value="${obj.dateFinished||todayStr()}"></div>
+    <div class="field"><label>Ta note</label>${starInputHTML('efStars', obj.rating||0)}</div>
+    <div class="field"><label>Avis (optionnel)</label><textarea id="efNotes" placeholder="Ton avis sur ce livre...">${escapeHtml(obj.notes||'')}</textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-danger btn-sm" style="flex:1;" id="efDelete">Supprimer</button>
+      <button class="btn btn-primary" style="flex:2;" id="efSave">Enregistrer</button>
+    </div>
+  `);
+  let starVal = obj.rating||0;
+  wireStarInput('efStars', starVal, v=> starVal=v);
+  document.getElementById('efSave').onclick = ()=>{
+    const title = document.getElementById('efTitle').value.trim();
+    if(!title){ toast('Le titre est obligatoire'); return; }
+    obj.title = title;
+    obj.pages = +document.getElementById('efPages').value || 0;
+    obj.dateFinished = document.getElementById('efDate').value || obj.dateFinished;
+    obj.rating = starVal;
+    obj.notes = document.getElementById('efNotes').value.trim();
+    if(!isTome){
+      obj.author = document.getElementById('efAuthor').value.trim();
+      obj.genre = document.getElementById('efGenre').value;
+    }
+    save(); closeModal(); renderAll();
+    toast('Modifications enregistrées ✅');
+  };
+  document.getElementById('efDelete').onclick = ()=>{
+    if(isTome){ sagaCtx.tomes = sagaCtx.tomes.filter(t=>t.id!==id); }
+    else { DATA.books = DATA.books.filter(b=>b.id!==id); }
+    save(); closeModal(); renderAll();
+    toast('Livre supprimé');
+  };
+}
+window.openEditFinished = openEditFinished;
 document.getElementById('lusSearch').addEventListener('input', function(){ renderLus(this.value); });
 
 /* ============ ADD BOOK / SAGA FLOW ============ */
@@ -987,10 +1120,8 @@ function openBookForm(status){
     </div>
     <div class="field"><label id="bfTitleLabel">Titre *</label><input type="text" id="bfTitle" placeholder="Titre du livre"></div>
     <div class="field"><label>Auteur</label><input type="text" id="bfAuthor" placeholder="Nom de l'auteur"></div>
-    <div class="row2">
-      <div class="field"><label>Genre</label><select id="bfGenre">${genreOptions()}</select></div>
-      <div class="field"><label>Pages</label><input type="number" id="bfPages" min="0"></div>
-    </div>
+    <div class="field"><label>Genre</label>${genreFieldHTML('bfGenre')}</div>
+    <div class="field"><label>Pages</label><input type="number" id="bfPages" min="0"></div>
     ${isLu? `<div class="field"><label>Date de fin de lecture *</label><input type="date" id="bfDate" value="${todayStr()}"></div>
     <div class="field"><label>Ta note</label>${starInputHTML('bfStars',0)}</div>
     <div class="field"><label>Avis (optionnel)</label><textarea id="bfNotes" placeholder="Ton avis sur ce livre..."></textarea></div>`
@@ -1081,10 +1212,8 @@ function openSagaForm(){
     <h2>🔄 Nouvelle saga</h2>
     <div class="field"><label>Nom de la saga *</label><input type="text" id="sfName" placeholder="Ex: Throne of Glass"></div>
     <div class="field"><label>Auteur</label><input type="text" id="sfAuthor" placeholder="Nom de l'auteur"></div>
-    <div class="row2">
-      <div class="field"><label>Genre</label><select id="sfGenre">${genreOptions()}</select></div>
-      <div class="field"><label>Statut de la saga</label><select id="sfStatus"><option value="encours">En cours d'écriture</option><option value="terminee">Terminée</option></select></div>
-    </div>
+    <div class="field"><label>Genre</label>${genreFieldHTML('sfGenre')}</div>
+    <div class="field"><label>Statut de la saga</label><select id="sfStatus"><option value="encours">En cours d'écriture</option><option value="terminee">Terminée</option></select></div>
     <div class="field"><label>Premier tome (optionnel, si tu le commences maintenant)</label><input type="text" id="sfTome1" placeholder="Titre du tome 1"></div>
     <div class="field"><label>Pages du tome 1</label><input type="number" id="sfTome1Pages" min="0"></div>
     <div class="modal-actions">
