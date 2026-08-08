@@ -158,34 +158,6 @@ body.dark .stat-box .num{color:var(--primary);}
 .empty-state{text-align:center; padding: 30px 10px; color:var(--text-dim);}
 .empty-state .em{font-size:38px; display:block; margin-bottom:8px;}
 
-/* Bookshelf */
-.shelf-wrap{padding-top:4px;}
-.shelf-row{display:flex; align-items:flex-end; gap:3px; padding:0 2px; flex-wrap:wrap; row-gap:0;}
-.book-spine{
-  height:132px; border-radius:4px 4px 2px 2px; position:relative; cursor:pointer; flex-shrink:0;
-  box-shadow: inset -4px 0 7px rgba(0,0,0,0.18), inset 3px 0 5px rgba(255,255,255,0.22), 0 3px 6px rgba(0,0,0,0.15);
-  display:flex; align-items:flex-start; justify-content:center; padding-top:8px;
-  transition: transform .15s;
-}
-.book-spine:active{ transform: translateY(-6px); }
-.spine-label{
-  writing-mode: vertical-rl; text-orientation: mixed; transform: rotate(180deg);
-  font-size:10.5px; font-weight:700; max-height:116px; overflow:hidden;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3); white-space:nowrap;
-}
-.shelf-plank{
-  height:14px; margin: 0 0 24px; border-radius:3px;
-  background: linear-gradient(180deg, #c48a5a, #8a5a34);
-  box-shadow: 0 6px 8px rgba(0,0,0,0.18), inset 0 2px 2px rgba(255,255,255,0.28);
-}
-body.dark .shelf-plank{ background: linear-gradient(180deg, #6b4530, #45291a); }
-
-/* Color picker */
-.color-picker{display:flex; flex-wrap:wrap; gap:9px;}
-.swatch{width:30px; height:30px; border-radius:50%; display:inline-block; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.55); cursor:pointer;}
-.swatch.sel{box-shadow: 0 0 0 3px var(--bg-elevated), 0 0 0 5px var(--primary);}
-.custom-swatch{overflow:hidden; display:flex; align-items:center; justify-content:center;}
-
 .tabs-sub{display:flex; gap:8px; margin-bottom:14px; overflow-x:auto;}
 .tabs-sub button{
   border:none; background:var(--bg-elevated); border:1px solid var(--border); color:var(--text-dim);
@@ -330,8 +302,8 @@ select.year-select{padding:6px 10px; border-radius:8px; border:1px solid var(--b
       <div class="stat-grid" style="margin-bottom:14px;">
         <div class="stat-box"><div class="num" id="statStreak">0</div><div class="lbl">🔥 Streak actuelle</div></div>
         <div class="stat-box"><div class="num" id="statLongest">0</div><div class="lbl">🏅 Record streak</div></div>
-        <div class="stat-box"><div class="num" id="statPagesYear">0</div><div class="lbl">📄 Pages cette année</div></div>
-        <div class="stat-box"><div class="num" id="statPagesTotal">0</div><div class="lbl">📚 Pages au total</div></div>
+        <div class="stat-box"><div class="num" id="statPagesYear">0</div><div class="lbl" id="statPagesYearLbl">📄 Pages cette année</div></div>
+        <div class="stat-box"><div class="num" id="statPagesTotal">0</div><div class="lbl">📚 Pages au total (ever)</div></div>
       </div>
 
       <div class="card">
@@ -375,10 +347,6 @@ select.year-select{padding:6px 10px; border-radius:8px; border:1px solid var(--b
 
     <!-- LUS -->
     <section class="section" id="sec-lus">
-      <div style="display:flex; gap:8px; margin-bottom:10px;">
-        <button class="btn btn-sm" id="lusViewShelf">📚 Étagère</button>
-        <button class="btn btn-sm" id="lusViewList">📋 Liste</button>
-      </div>
       <div class="field" style="margin-bottom:10px;">
         <input type="text" id="lusSearch" placeholder="🔍 Rechercher un titre, auteur, genre...">
       </div>
@@ -435,47 +403,8 @@ const TIERS = [
   {n:2000, name:"Immortel(le) des lettres", em:"✨"},
 ];
 
-const GENRES = ["Romance","Fantasy","Young Adult","Policier / Thriller","Science-Fiction","Littérature classique","Contemporain","Développement personnel","Historique","Horreur","BD / Manga","Autre"];
+const GENRES = ["Romance","Fantasy","Fantastique","Young Adult","Policier / Thriller","Science-Fiction","Littérature classique","Contemporain","Développement personnel","Historique","Horreur","BD / Manga","Autre"];
 const COVER_EMOJIS = ["📕","📔","📙","💗","📓","📖","❤️"];
-const COLOR_PRESETS = ["#e63950","#ff8fa3","#ffb84f","#ffd166","#8bd3c7","#4fd1c5","#5c9ead","#7c5cff","#a78bfa","#c9a0dc","#6b4c3b","#4a4a4a"];
-
-function colorPickerHTML(id, initial){
-  const val = initial || COLOR_PRESETS[0];
-  const isCustom = !COLOR_PRESETS.includes(val);
-  return `<div class="color-picker" id="${id}" data-value="${val}">
-    ${COLOR_PRESETS.map(c=>`<span class="swatch ${c===val?'sel':''}" data-c="${c}" style="background:${c}"></span>`).join('')}
-    <label class="swatch custom-swatch ${isCustom?'sel':''}" style="background:${isCustom?val:'conic-gradient(red,yellow,lime,cyan,blue,magenta,red)'}">
-      <input type="color" id="${id}_native" value="${isCustom?val:'#8a6d5c'}" style="opacity:0; width:100%; height:100%; cursor:pointer;">
-    </label>
-  </div>`;
-}
-function wireColorPicker(id, initial, onChange){
-  const el = document.getElementById(id);
-  if(!el) return;
-  function selectSwatch(v, fromNative){
-    el.dataset.value = v;
-    el.querySelectorAll('.swatch').forEach(s=> s.classList.remove('sel'));
-    const match = !fromNative && el.querySelector(`.swatch[data-c="${v}"]`);
-    if(match) match.classList.add('sel'); else el.querySelector('.custom-swatch').classList.add('sel');
-    onChange(v);
-  }
-  el.querySelectorAll('.swatch[data-c]').forEach(sw=>{
-    sw.addEventListener('click', ()=> selectSwatch(sw.dataset.c, false));
-  });
-  const native = document.getElementById(id+'_native');
-  native.addEventListener('input', ()=>{
-    el.querySelector('.custom-swatch').style.background = native.value;
-    selectSwatch(native.value, true);
-  });
-}
-function textColorFor(hex){
-  if(!hex) return '#ffffff';
-  const c = hex.replace('#','');
-  if(c.length!==6) return '#ffffff';
-  const r=parseInt(c.substr(0,2),16), g=parseInt(c.substr(2,2),16), b=parseInt(c.substr(4,2),16);
-  const lum = (0.299*r+0.587*g+0.114*b)/255;
-  return lum>0.62 ? '#2b2540' : '#ffffff';
-}
 
 function defaultData(){
   return {
@@ -500,19 +429,16 @@ function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); }
 
 /* ============ DERIVED HELPERS ============ */
 function allFinishedItems(){
-  // returns array of {id, title, author, pages, dateFinished, rating, genre, color, notes}
+  // returns array of {title, pages, dateFinished, rating, genre}
   const out = [];
-  DATA.books.filter(b=>b.status==='lu' && b.dateFinished).forEach(b=> out.push({id:b.id, title:b.title, author:b.author||'', pages:+b.pages||0, dateFinished:b.dateFinished, rating:b.rating||0, genre:b.genre||'Autre', color:b.color||null, notes:b.notes||''}));
-  DATA.sagas.forEach(s=> s.tomes.filter(t=>t.status==='lu' && t.dateFinished).forEach(t=> out.push({id:t.id, title: s.name+' — '+t.title, author:s.author||'', pages:+t.pages||0, dateFinished:t.dateFinished, rating:t.rating||0, genre:s.genre||'Autre', color:t.color||null, notes:''})));
+  DATA.books.filter(b=>b.status==='lu' && b.dateFinished).forEach(b=> out.push({title:b.title, pages:+b.pages||0, dateFinished:b.dateFinished, rating:b.rating||0, genre:b.genre||'Autre'}));
+  DATA.sagas.forEach(s=> s.tomes.filter(t=>t.status==='lu' && t.dateFinished).forEach(t=> out.push({title: s.name+' — '+t.title, pages:+t.pages||0, dateFinished:t.dateFinished, rating:t.rating||0, genre:s.genre||'Autre'})));
   return out;
 }
 function lifetimeCount(){ return allFinishedItems().length; }
 function countForYear(y){ return allFinishedItems().filter(i=> yearOf(i.dateFinished)===y).length; }
 function pagesForYear(y){ return allFinishedItems().filter(i=> yearOf(i.dateFinished)===y).reduce((s,i)=>s+i.pages,0); }
 function pagesTotal(){ return allFinishedItems().reduce((s,i)=>s+i.pages,0); }
-function pagesFromLogForYear(y){
-  return Object.entries(DATA.dailyLog).filter(([d,l])=> l.read && yearOf(d)===y).reduce((s,[d,l])=>s+(+l.pages||0),0);
-}
 function currentTier(count){
   let cur=null; for(const t of TIERS){ if(count>=t.n) cur=t; } return cur;
 }
@@ -714,7 +640,7 @@ function renderObjectifs(){
   const y = new Date().getFullYear();
   // year select
   const sel = document.getElementById('goalYearSelect');
-  const years = new Set([y, ...Object.keys(DATA.settings.yearlyGoals).map(Number)]);
+  const years = new Set([y, ...Object.keys(DATA.settings.yearlyGoals).map(Number), ...allFinishedItems().map(i=>yearOf(i.dateFinished)).filter(Boolean)]);
   const selectedYear = +(sel.dataset.selected || y);
   sel.innerHTML = [...years].sort((a,b)=>b-a).map(yr=>`<option value="${yr}" ${yr===selectedYear?'selected':''}>${yr}</option>`).join('');
   sel.dataset.selected = selectedYear;
@@ -731,8 +657,9 @@ function renderObjectifs(){
   document.getElementById('statStreak').textContent = streak;
   document.getElementById('statLongest').textContent = longest;
   document.getElementById('headerStreak').textContent = streak;
-  document.getElementById('statPagesYear').textContent = pagesFromLogForYear(y);
-  document.getElementById('statPagesTotal').textContent = Object.values(DATA.dailyLog).filter(l=>l.read).reduce((s,l)=>s+(+l.pages||0),0);
+  document.getElementById('statPagesYear').textContent = pagesForYear(selectedYear);
+  document.getElementById('statPagesYearLbl').textContent = '📄 Pages en ' + selectedYear;
+  document.getElementById('statPagesTotal').textContent = pagesTotal();
 
   // heatmap: last 52 weeks
   const hm = document.getElementById('heatmap');
@@ -845,21 +772,9 @@ function renderPAL(){
 }
 function startReading(id){
   const b = DATA.books.find(x=>x.id===id); if(!b) return;
-  openModal(`
-    <h2>📖 Tu commences "${escapeHtml(b.title)}" !</h2>
-    <div class="field"><label>Quelle couleur pour ce livre sur ton étagère ?</label>${colorPickerHTML('srColor', b.color)}</div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" style="flex:1;" onclick="closeModal()">Annuler</button>
-      <button class="btn btn-primary" style="flex:2;" id="srSave">Commencer</button>
-    </div>
-  `);
-  let chosen = b.color || COLOR_PRESETS[0];
-  wireColorPicker('srColor', chosen, v=>chosen=v);
-  document.getElementById('srSave').onclick = ()=>{
-    b.status='reading'; b.dateStarted=todayStr(); b.color=chosen;
-    save(); closeModal(); renderAll();
-    toast('📖 Bonne lecture avec "'+b.title+'" !');
-  };
+  b.status='reading'; b.dateStarted=todayStr();
+  save(); renderAll();
+  toast('📖 Bonne lecture avec "'+b.title+'" !');
 }
 window.startReading = startReading;
 function deleteBook(id){
@@ -915,7 +830,7 @@ function openRandomPick(){
     </div>
   `);
   document.getElementById('rerollBtn').onclick = openRandomPick;
-  document.getElementById('confirmPickBtn').onclick = ()=>{ confettiBurst(); startReading(pick.id); };
+  document.getElementById('confirmPickBtn').onclick = ()=>{ startReading(pick.id); closeModal(); confettiBurst(); };
 }
 document.getElementById('btnRandomPick').onclick = openRandomPick;
 
@@ -978,7 +893,6 @@ function toggleSagaStatus(id){
 window.toggleSagaStatus = toggleSagaStatus;
 function cycleTome(sagaId, tomeId){
   const s = DATA.sagas.find(x=>x.id===sagaId); const t = s.tomes.find(x=>x.id===tomeId);
-  if(t.status==='a_lire'){ promptTomeColor(sagaId, tomeId); return; }
   const order = ['a_lire','en_cours','lu'];
   const idx = order.indexOf(t.status);
   const wasLu = t.status==='lu';
@@ -988,25 +902,6 @@ function cycleTome(sagaId, tomeId){
   save(); renderAll();
 }
 window.cycleTome = cycleTome;
-function promptTomeColor(sagaId, tomeId){
-  const s = DATA.sagas.find(x=>x.id===sagaId); const t = s.tomes.find(x=>x.id===tomeId);
-  openModal(`
-    <h2>📖 Tu commences "${escapeHtml(t.title)}" !</h2>
-    <div class="field"><label>Quelle couleur pour ce tome sur ton étagère ?</label>${colorPickerHTML('ptColor', t.color)}</div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" style="flex:1;" onclick="closeModal()">Annuler</button>
-      <button class="btn btn-primary" style="flex:2;" id="ptSave">Commencer</button>
-    </div>
-  `);
-  let chosen = t.color || COLOR_PRESETS[0];
-  wireColorPicker('ptColor', chosen, v=>chosen=v);
-  document.getElementById('ptSave').onclick = ()=>{
-    t.status = 'en_cours'; t.color = chosen;
-    save(); closeModal(); renderAll();
-    toast('📖 Bonne lecture !');
-  };
-}
-window.promptTomeColor = promptTomeColor;
 function deleteTome(sagaId, tomeId){
   const s = DATA.sagas.find(x=>x.id===sagaId); s.tomes = s.tomes.filter(t=>t.id!==tomeId); save(); renderAll();
 }
@@ -1034,49 +929,6 @@ function addTomePrompt(sagaId){
 window.addTomePrompt = addTomePrompt;
 
 /* ============ RENDER: LUS ============ */
-let lusView = 'shelf';
-function spineWidth(pages){
-  const p = pages || 220;
-  return Math.round(Math.max(18, Math.min(58, 18 + (p/450)*32)));
-}
-function renderShelfHTML(items){
-  const CHUNK = 6;
-  let html = '<div class="shelf-wrap">';
-  for(let i=0;i<items.length;i+=CHUNK){
-    const chunk = items.slice(i, i+CHUNK);
-    html += '<div class="shelf-row">' + chunk.map(it=>{
-      const w = spineWidth(it.pages);
-      const col = it.color || '#8a6d5c';
-      const txt = textColorFor(col);
-      return `<div class="book-spine" style="width:${w}px; background:${col};" onclick="showSpineInfo('${it.id}')" title="${escapeAttr(it.title)}">
-        <span class="spine-label" style="color:${txt};">${escapeHtml(it.title)}</span>
-      </div>`;
-    }).join('') + '</div><div class="shelf-plank"></div>';
-  }
-  html += '</div>';
-  return html;
-}
-function showSpineInfo(id){
-  const item = allFinishedItems().find(i=>i.id===id); if(!item) return;
-  openModal(`
-    <h2>${escapeHtml(item.title)}</h2>
-    ${item.author? '<div class="book-meta" style="margin-bottom:8px;">'+escapeHtml(item.author)+'</div>':''}
-    <div style="margin-bottom:10px;">${item.genre?'<span class="pill">'+item.genre+'</span>':''}${item.pages?' <span class="pill">'+item.pages+' pages</span>':''}</div>
-    <div style="font-size:13px; color:var(--text-dim); margin-bottom:8px;">Terminé le ${fmtDate(item.dateFinished)}</div>
-    ${item.rating? '<div class="stars" style="font-size:18px; margin-bottom:8px;">'+'★'.repeat(item.rating)+'☆'.repeat(5-item.rating)+'</div>':''}
-    ${item.notes? '<div style="font-size:13.5px; background:var(--primary-light); padding:10px; border-radius:10px;">'+escapeHtml(item.notes)+'</div>':''}
-    <div class="modal-actions" style="margin-top:14px;"><button class="btn btn-primary btn-block" onclick="closeModal()">Fermer</button></div>
-  `);
-}
-window.showSpineInfo = showSpineInfo;
-function refreshLusViewButtons(){
-  document.getElementById('lusViewShelf').className = 'btn btn-sm ' + (lusView==='shelf'?'btn-primary':'btn-ghost');
-  document.getElementById('lusViewList').className = 'btn btn-sm ' + (lusView==='list'?'btn-primary':'btn-ghost');
-}
-document.getElementById('lusViewShelf').onclick = ()=>{ lusView='shelf'; refreshLusViewButtons(); renderLus(document.getElementById('lusSearch').value); };
-document.getElementById('lusViewList').onclick = ()=>{ lusView='list'; refreshLusViewButtons(); renderLus(document.getElementById('lusSearch').value); };
-refreshLusViewButtons();
-
 function renderLus(query){
   query = (query||'').toLowerCase();
   const items = allFinishedItems().sort((a,b)=> (b.dateFinished||'').localeCompare(a.dateFinished||''));
@@ -1084,13 +936,9 @@ function renderLus(query){
   document.getElementById('lusCount').textContent = items.length;
   const list = document.getElementById('lusList');
   if(filtered.length===0){ list.innerHTML = `<div class="empty-state"><span class="em">✅</span>Aucun livre lu pour l'instant.</div>`; return; }
-  if(lusView==='shelf'){
-    list.innerHTML = renderShelfHTML(filtered);
-    return;
-  }
   list.innerHTML = filtered.map(i=>`
     <div class="book-item">
-      <div class="book-cover" style="${i.color?'background:'+i.color+';':''}">${i.color?'':'📗'}</div>
+      <div class="book-cover">📗</div>
       <div class="book-info">
         <div class="t">${escapeHtml(i.title)}</div>
         <div class="book-meta">${i.genre?'<span class="pill">'+i.genre+'</span>':''}${i.pages?i.pages+' pages · ':''}Terminé le ${fmtDate(i.dateFinished)}</div>
@@ -1143,7 +991,6 @@ function openBookForm(status){
       <div class="field"><label>Genre</label><select id="bfGenre">${genreOptions()}</select></div>
       <div class="field"><label>Pages</label><input type="number" id="bfPages" min="0"></div>
     </div>
-    ${(isReading||isLu)? `<div class="field"><label>Couleur du livre (pour ton étagère)</label>${colorPickerHTML('bfColor', null)}</div>`:''}
     ${isLu? `<div class="field"><label>Date de fin de lecture *</label><input type="date" id="bfDate" value="${todayStr()}"></div>
     <div class="field"><label>Ta note</label>${starInputHTML('bfStars',0)}</div>
     <div class="field"><label>Avis (optionnel)</label><textarea id="bfNotes" placeholder="Ton avis sur ce livre..."></textarea></div>`
@@ -1155,8 +1002,6 @@ function openBookForm(status){
   `);
   let starVal = 0;
   wireStarInput('bfStars', 0, v=> starVal=v);
-  let colorVal = COLOR_PRESETS[0];
-  wireColorPicker('bfColor', colorVal, v=> colorVal=v);
 
   let sagaMode = false;
   function refreshSagaUI(){
@@ -1187,7 +1032,7 @@ function openBookForm(status){
       } else {
         saga.status = sagaStatus;
       }
-      const tome = { id: uid(), title, pages: +document.getElementById('bfPages').value||0, status: tomeStatus, dateFinished: null, rating: 0, color: (isReading||isLu)? colorVal : null };
+      const tome = { id: uid(), title, pages: +document.getElementById('bfPages').value||0, status: tomeStatus, dateFinished: null, rating: 0 };
       if(isLu){
         tome.dateFinished = document.getElementById('bfDate').value || todayStr();
         tome.rating = starVal;
@@ -1211,7 +1056,6 @@ function openBookForm(status){
       status, dateAdded: todayStr(), priority: status==='pal'? starVal:0
     };
     if(status==='reading'){ book.dateStarted = todayStr(); }
-    if(isReading||isLu){ book.color = colorVal; }
     if(isLu){
       book.dateFinished = document.getElementById('bfDate').value || todayStr();
       book.rating = starVal;
@@ -1243,20 +1087,17 @@ function openSagaForm(){
     </div>
     <div class="field"><label>Premier tome (optionnel, si tu le commences maintenant)</label><input type="text" id="sfTome1" placeholder="Titre du tome 1"></div>
     <div class="field"><label>Pages du tome 1</label><input type="number" id="sfTome1Pages" min="0"></div>
-    <div class="field"><label>Couleur du tome 1</label>${colorPickerHTML('sfTome1Color', null)}</div>
     <div class="modal-actions">
       <button class="btn btn-ghost" style="flex:1;" onclick="closeModal()">Annuler</button>
       <button class="btn btn-primary" style="flex:2;" id="sfSave">Créer</button>
     </div>
   `);
-  let tome1Color = COLOR_PRESETS[0];
-  wireColorPicker('sfTome1Color', tome1Color, v=> tome1Color=v);
   document.getElementById('sfSave').onclick = ()=>{
     const name = document.getElementById('sfName').value.trim();
     if(!name){ toast('Le nom est obligatoire'); return; }
     const saga = { id: uid(), name, author: document.getElementById('sfAuthor').value.trim(), genre: document.getElementById('sfGenre').value, cover:'🔄', status: document.getElementById('sfStatus').value, tomes:[] };
     const t1 = document.getElementById('sfTome1').value.trim();
-    if(t1) saga.tomes.push({id:uid(), title:t1, pages:+document.getElementById('sfTome1Pages').value||0, status:'en_cours', dateFinished:null, rating:0, color:tome1Color});
+    if(t1) saga.tomes.push({id:uid(), title:t1, pages:+document.getElementById('sfTome1Pages').value||0, status:'en_cours', dateFinished:null, rating:0});
     DATA.sagas.push(saga); save(); closeModal(); renderAll(); toast('Saga créée !');
   };
 }
