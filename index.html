@@ -780,11 +780,12 @@ document.getElementById('btnEditGoal').onclick = ()=>{
 /* ============ RENDER: PAL ============ */
 function renderPAL(){
   const reading = DATA.books.filter(b=>b.status==='reading');
+  const readingTomes = currentlyReadingSagaTomes();
   const readingCard = document.getElementById('readingCard');
   const readingList = document.getElementById('readingList');
-  if(reading.length){
+  if(reading.length || readingTomes.length){
     readingCard.style.display='block';
-    readingList.innerHTML = reading.map(b=>`
+    let rHtml = reading.map(b=>`
       <div class="book-item">
         <div class="book-cover">${b.cover||'📖'}</div>
         <div class="book-info">
@@ -798,6 +799,21 @@ function renderPAL(){
         </div>
       </div>
     `).join('');
+    rHtml += readingTomes.map(t=>`
+      <div class="book-item">
+        <div class="book-cover">🔄</div>
+        <div class="book-info">
+          <div class="t">${escapeHtml(t.title)}</div>
+          <div class="a">${escapeHtml(t.author||'')}</div>
+          <div class="book-meta"><span class="pill">Saga</span>${t.genre?'<span class="pill">'+t.genre+'</span>':''}${t.pages?t.pages+' pages':''}</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <button class="btn btn-soft btn-sm" onclick="cycleTome('${t.sagaId}','${t.tomeId}')">Terminer</button>
+          <span class="link-del" onclick="deleteTome('${t.sagaId}','${t.tomeId}')" style="text-align:center;">Suppr.</span>
+        </div>
+      </div>
+    `).join('');
+    readingList.innerHTML = rHtml;
   } else {
     readingCard.style.display='none';
     readingList.innerHTML = '';
@@ -838,12 +854,19 @@ function renderPAL(){
   `).join('');
   list.innerHTML = html;
 }
-function sagaIsStarted(s){ return s.tomes.some(t=> t.status==='en_cours' || t.status==='lu'); }
+function sagaFullyRead(s){ return s.tomes.length>0 && s.tomes.every(t=>t.status==='lu'); }
+function currentlyReadingSagaTomes(){
+  const rows = [];
+  DATA.sagas.forEach(s=>{
+    s.tomes.filter(t=>t.status==='en_cours').forEach(t=>{
+      rows.push({ sagaId: s.id, tomeId: t.id, title: s.name+' — '+t.title, author: s.author||'', genre: s.genre||'', pages: t.pages||0 });
+    });
+  });
+  return rows;
+}
 function upcomingSagaTomes(){
   const rows = [];
   DATA.sagas.forEach(s=>{
-    if((s.status||'encours')==='terminee') return;
-    if(sagaIsStarted(s)) return;
     s.tomes.filter(t=>t.status==='a_lire').forEach(t=>{
       rows.push({ sagaId: s.id, tomeId: t.id, title: s.name+' — '+t.title, author: s.author||'', genre: s.genre||'', pages: t.pages||0 });
     });
@@ -918,7 +941,7 @@ document.getElementById('btnRandomPick').onclick = openRandomPick;
 function sagaCardHTML(s){
   const total = s.tomes.length;
   const lu = s.tomes.filter(t=>t.status==='lu').length;
-  const isFinished = (s.status||'encours')==='terminee';
+  const writingDone = (s.status||'encours')==='terminee';
   return `
   <div class="card saga-card">
     <div class="card-title">
@@ -927,7 +950,7 @@ function sagaCardHTML(s){
     </div>
     <div style="margin:-4px 0 10px;">
       ${s.author? '<span class="book-meta">'+escapeHtml(s.author)+' · </span>':''}
-      <span class="pill">${isFinished? 'Terminée':"En cours d'écriture"}</span>
+      <span class="pill">${writingDone? 'Série complète':"Série en cours"}</span>
       ${s.genre? ' <span class="pill">'+s.genre+'</span>':''}
     </div>
     <div class="progress-bar" style="margin-bottom:10px;"><div style="width:${total?Math.round(lu/total*100):0}%"></div></div>
@@ -941,46 +964,39 @@ function sagaCardHTML(s){
     `).join('')}
     <div style="display:flex; gap:8px; margin-top:10px;">
       <button class="btn btn-soft btn-sm" style="flex:1;" onclick="addTomePrompt('${s.id}')">+ Tome</button>
-      <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="toggleSagaStatus('${s.id}')">${isFinished? '↩️ Remettre en cours':'✅ Marquer terminée'}</button>
     </div>
   </div>`;
 }
 function renderSagas(){
   const list = document.getElementById('sagasList');
-  // Une saga apparaît ici seulement si elle est activement en cours de lecture (un tome commencé),
-  // ou si elle n'a encore aucun tome (pour pouvoir en ajouter). Les sagas pas encore commencées
-  // affichent leurs tomes directement dans la PAL, tant qu'aucun tome n'a été démarré.
-  const active = DATA.sagas.filter(s=> (s.status||'encours') !== 'terminee' && (sagaIsStarted(s) || s.tomes.length===0));
-  const finished = DATA.sagas.filter(s=> (s.status||'encours') === 'terminee');
+  // Cet onglet montre uniquement les sagas qui ne sont pas encore entièrement lues — qu'elles
+  // soient en cours de lecture en parallèle ou pas encore commencées (tomes en PAL). Dès que
+  // TOUS les tomes d'une saga sont marqués lus, la saga disparaît complètement de cet onglet :
+  // ses tomes vivent désormais uniquement dans "Livres lus", comme des livres normaux.
+  // "Statut de parution" (l'autrice a fini d'écrire ou non) est purement informatif ("y aura-t-il
+  // encore des tomes ?") et n'a aucun effet sur cet affichage.
+  const active = DATA.sagas.filter(s=> !sagaFullyRead(s));
 
-  if(active.length===0 && finished.length===0){
-    list.innerHTML = `<div class="card"><div class="empty-state"><span class="em">🔄</span>Aucune saga en cours de lecture.<br>Les sagas pas encore commencées apparaissent dans ta PAL.</div></div>`;
+  if(active.length===0){
+    list.innerHTML = `<div class="card"><div class="empty-state"><span class="em">🔄</span>Aucune saga en cours.<br>Ajoute un livre en cochant "Fait partie d'une saga" pour en créer une.</div></div>`;
     return;
   }
-  let html = active.length
-    ? active.map(sagaCardHTML).join('')
-    : `<div class="card"><div class="empty-state"><span class="em">🔄</span>Aucune saga en cours de lecture.<br>Les sagas pas encore commencées apparaissent dans ta PAL.</div></div>`;
-  if(finished.length){
-    html += `<details style="margin-top:6px;"><summary style="cursor:pointer; font-weight:700; color:var(--text-dim); padding:10px 4px;">Sagas terminées (${finished.length})</summary>${finished.map(sagaCardHTML).join('')}</details>`;
-  }
-  list.innerHTML = html;
+  list.innerHTML = active.map(sagaCardHTML).join('');
 }
-function toggleSagaStatus(id){
-  const s = DATA.sagas.find(x=>x.id===id); if(!s) return;
-  const wasFinished = (s.status||'encours')==='terminee';
-  s.status = wasFinished? 'encours':'terminee';
-  save(); renderAll();
-  if(!wasFinished){ toast('🎉 Saga marquée comme terminée !'); confettiBurst(); }
-  else toast('Saga remise en cours');
-}
-window.toggleSagaStatus = toggleSagaStatus;
 function cycleTome(sagaId, tomeId){
   const s = DATA.sagas.find(x=>x.id===sagaId); const t = s.tomes.find(x=>x.id===tomeId);
   const order = ['a_lire','en_cours','lu'];
   const idx = order.indexOf(t.status);
   const wasLu = t.status==='lu';
   t.status = order[(idx+1)%order.length];
-  if(t.status==='lu'){ t.dateFinished = todayStr(); if(!wasLu) confettiBurst(); }
+  if(t.status==='lu'){
+    t.dateFinished = todayStr();
+    if(!wasLu){
+      confettiBurst();
+      checkTierCelebration();
+      if(sagaFullyRead(s)) toast('🏆 Saga "'+s.name+'" entièrement lue !');
+    }
+  }
   else if(wasLu){ t.dateFinished = null; }
   save(); renderAll();
 }
@@ -1116,7 +1132,7 @@ function openBookForm(status){
     </div>
     <div id="bfSagaFields" style="display:none;">
       <div class="field"><label>Nom de la saga *</label><input list="bfSagaList" id="bfSagaName" placeholder="Ex: Throne of Glass"><datalist id="bfSagaList">${sagaNameOptions()}</datalist></div>
-      <div class="field"><label>Statut de la saga</label><select id="bfSagaStatus"><option value="encours">En cours d'écriture</option><option value="terminee">Terminée</option></select></div>
+      <div class="field"><label>Statut de parution (l'autrice a-t-elle fini d'écrire la saga ?)</label><select id="bfSagaStatus"><option value="encours">En cours d'écriture</option><option value="terminee">Série complète</option></select></div>
     </div>
     <div class="field"><label id="bfTitleLabel">Titre *</label><input type="text" id="bfTitle" placeholder="Titre du livre"></div>
     <div class="field"><label>Auteur</label><input type="text" id="bfAuthor" placeholder="Nom de l'auteur"></div>
@@ -1213,7 +1229,7 @@ function openSagaForm(){
     <div class="field"><label>Nom de la saga *</label><input type="text" id="sfName" placeholder="Ex: Throne of Glass"></div>
     <div class="field"><label>Auteur</label><input type="text" id="sfAuthor" placeholder="Nom de l'auteur"></div>
     <div class="field"><label>Genre</label>${genreFieldHTML('sfGenre')}</div>
-    <div class="field"><label>Statut de la saga</label><select id="sfStatus"><option value="encours">En cours d'écriture</option><option value="terminee">Terminée</option></select></div>
+    <div class="field"><label>Statut de parution (l'autrice a-t-elle fini d'écrire la saga ?)</label><select id="sfStatus"><option value="encours">En cours d'écriture</option><option value="terminee">Série complète</option></select></div>
     <div class="field"><label>Premier tome (optionnel, si tu le commences maintenant)</label><input type="text" id="sfTome1" placeholder="Titre du tome 1"></div>
     <div class="field"><label>Pages du tome 1</label><input type="number" id="sfTome1Pages" min="0"></div>
     <div class="modal-actions">
@@ -1245,12 +1261,24 @@ document.getElementById('btnSettings').onclick = ()=>{
       <label>Importer une sauvegarde</label>
       <input type="file" id="importFile" accept="application/json">
     </div>
+    <div class="field" style="margin-top:16px; padding:12px; background:var(--bg-soft,#fff0f4); border-radius:12px;">
+      <label>Adresse où sont stockées tes données</label>
+      <div id="currentUrlBox" style="font-size:12px; word-break:break-all; color:var(--text-dim); margin:4px 0 8px;">${location.href}</div>
+      <button class="btn btn-soft btn-block btn-sm" id="copyUrlBtn">📋 Copier ce lien</button>
+      <div style="font-size:11px; color:var(--text-dim); margin-top:8px;">Tes livres, sagas et journal sont liés à CETTE adresse précise. Si tu ouvres une autre adresse dans Safari (même ton dépôt GitHub, mais orthographiée différemment), tu ne verras rien : ce sera une page vide, pas une perte de données. Compare toujours l'adresse affichée ici à celle que tu ouvres dans Safari.</div>
+    </div>
     <div class="field" style="margin-top:6px; text-align:center; color:var(--text-dim); font-size:12px;">Book's Club — tes données restent uniquement sur cet appareil.</div>
   `);
   document.getElementById('darkSwitch').onclick = function(){
     DATA.settings.darkMode = !DATA.settings.darkMode; save();
     document.body.classList.toggle('dark', DATA.settings.darkMode);
     this.classList.toggle('on', DATA.settings.darkMode);
+  };
+  document.getElementById('copyUrlBtn').onclick = function(){
+    const done = ()=>{ toast('Lien copié ✅'); };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(location.href).then(done).catch(done);
+    } else { done(); }
   };
   document.getElementById('exportBtn').onclick = ()=>{
     const blob = new Blob([JSON.stringify(DATA,null,2)], {type:'application/json'});
