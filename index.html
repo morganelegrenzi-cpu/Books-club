@@ -977,18 +977,21 @@ function sagaCardHTML(s){
     </div>
   </div>`;
 }
+function sagaHasReadTome(s){ return s.tomes.some(t=>t.status==='lu'); }
 function renderSagas(){
   const list = document.getElementById('sagasList');
-  // Cet onglet montre uniquement les sagas qui ne sont pas encore entièrement lues — qu'elles
-  // soient en cours de lecture en parallèle ou pas encore commencées (tomes en PAL). Dès que
-  // TOUS les tomes d'une saga sont marqués lus, la saga disparaît complètement de cet onglet :
-  // ses tomes vivent désormais uniquement dans "Livres lus", comme des livres normaux.
-  // "Statut de parution" (l'autrice a fini d'écrire ou non) est purement informatif ("y aura-t-il
-  // encore des tomes ?") et n'a aucun effet sur cet affichage.
-  const active = DATA.sagas.filter(s=> !sagaFullyRead(s));
+  // Une saga n'apparaît dans cet onglet qu'à partir du moment où AU MOINS UN tome a été lu
+  // (une saga jamais commencée reste uniquement dans la PAL, elle n'est pas dupliquée ici).
+  // Une fois qu'au moins un tome est lu, la saga reste visible tant qu'elle n'est pas
+  // complètement terminée : soit il reste des tomes non lus (dans la PAL), soit elle est
+  // toujours "en cours d'écriture" même si tout ce qui est sorti a déjà été lu.
+  // Dès que TOUS les tomes sont lus ET que le statut de parution est "Série complète", la
+  // saga disparaît complètement de cet onglet : ses tomes vivent alors uniquement dans
+  // "Livres lus", comme des livres normaux.
+  const active = DATA.sagas.filter(s=> sagaHasReadTome(s) && !sagaFullyRead(s));
 
   if(active.length===0){
-    list.innerHTML = `<div class="card"><div class="empty-state"><span class="em">🔄</span>Aucune saga en cours.<br>Ajoute un livre en cochant "Fait partie d'une saga" pour en créer une.</div></div>`;
+    list.innerHTML = `<div class="card"><div class="empty-state"><span class="em">🔄</span>Aucune saga en cours.<br>Une saga apparaît ici dès que tu as lu au moins un de ses tomes.</div></div>`;
     return;
   }
   list.innerHTML = active.map(sagaCardHTML).join('');
