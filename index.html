@@ -854,7 +854,14 @@ function renderPAL(){
   `).join('');
   list.innerHTML = html;
 }
-function sagaFullyRead(s){ return s.tomes.length>0 && s.tomes.every(t=>t.status==='lu'); }
+function sagaFullyRead(s){
+  // Une saga ne quitte les Sagas en cours que si TOUS ses tomes existants sont lus ET que
+  // l'autrice a fini de l'écrire (statut de parution = "terminée"). Si elle est encore en
+  // cours d'écriture, la saga reste visible même quand on est "à jour" avec les tomes sortis,
+  // pour ne pas oublier qu'on l'attend toujours.
+  const writingDone = (s.status||'encours')==='terminee';
+  return writingDone && s.tomes.length>0 && s.tomes.every(t=>t.status==='lu');
+}
 function currentlyReadingSagaTomes(){
   const rows = [];
   DATA.sagas.forEach(s=>{
@@ -948,9 +955,12 @@ function sagaCardHTML(s){
       <h3 style="text-transform:none; font-size:16px; color:var(--text);">${s.cover||'🔄'} ${escapeHtml(s.name)}</h3>
       <span class="link-del" onclick="deleteSaga('${s.id}')">Suppr.</span>
     </div>
-    <div style="margin:-4px 0 10px;">
+    <div style="margin:-4px 0 10px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
       ${s.author? '<span class="book-meta">'+escapeHtml(s.author)+' · </span>':''}
-      <span class="pill">${writingDone? 'Série complète':"Série en cours"}</span>
+      <select class="pill" style="border:none; font-family:inherit; cursor:pointer;" onchange="setSagaStatus('${s.id}', this.value)" title="Statut de parution : y aura-t-il encore des tomes ?">
+        <option value="encours" ${!writingDone?'selected':''}>Série en cours</option>
+        <option value="terminee" ${writingDone?'selected':''}>Série complète</option>
+      </select>
       ${s.genre? ' <span class="pill">'+s.genre+'</span>':''}
     </div>
     <div class="progress-bar" style="margin-bottom:10px;"><div style="width:${total?Math.round(lu/total*100):0}%"></div></div>
@@ -1007,6 +1017,12 @@ function deleteTome(sagaId, tomeId){
 window.deleteTome = deleteTome;
 function deleteSaga(id){ DATA.sagas = DATA.sagas.filter(s=>s.id!==id); save(); renderAll(); }
 window.deleteSaga = deleteSaga;
+function setSagaStatus(id, value){
+  const s = DATA.sagas.find(x=>x.id===id); if(!s) return;
+  s.status = value;
+  save(); renderAll();
+}
+window.setSagaStatus = setSagaStatus;
 function addTomePrompt(sagaId){
   openModal(`
     <h2>Nouveau tome</h2>
