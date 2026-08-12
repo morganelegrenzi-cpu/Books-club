@@ -334,6 +334,9 @@ select.year-select{padding:6px 10px; border-radius:8px; border:1px solid var(--b
         <div class="card-title"><h3>📖 En cours de lecture</h3></div>
         <div id="readingList"></div>
       </div>
+      <div class="field" style="margin-bottom:10px;">
+        <input type="text" id="palSearch" placeholder="🔍 Rechercher dans ta PAL (titre, auteur)...">
+      </div>
       <div class="card">
         <div class="card-title"><h3>Ma pile à lire (<span id="palCount">0</span>)</h3></div>
         <div id="palList"></div>
@@ -451,7 +454,7 @@ function allFinishedItems(){
   // returns array of {refType, id, sagaId, title, pages, dateFinished, rating, genre}
   const out = [];
   DATA.books.filter(b=>b.status==='lu' && b.dateFinished).forEach(b=> out.push({refType:'book', id:b.id, sagaId:null, title:b.title, pages:+b.pages||0, dateFinished:b.dateFinished, rating:b.rating||0, genre:b.genre||'Autre'}));
-  DATA.sagas.forEach(s=> s.tomes.filter(t=>t.status==='lu' && t.dateFinished).forEach(t=> out.push({refType:'tome', id:t.id, sagaId:s.id, title: s.name+' — '+t.title, pages:+t.pages||0, dateFinished:t.dateFinished, rating:t.rating||0, genre:s.genre||'Autre'})));
+  DATA.sagas.forEach(s=> s.tomes.filter(t=>t.status==='lu' && t.dateFinished).forEach(t=> out.push({refType:'tome', id:t.id, sagaId:s.id, title: s.name+' — '+t.title, pages:+t.pages||0, dateFinished:t.dateFinished, rating:t.rating||0, genre:t.genre||s.genre||'Autre'})));
   return out;
 }
 function lifetimeCount(){ return allFinishedItems().length; }
@@ -778,7 +781,8 @@ document.getElementById('btnEditGoal').onclick = ()=>{
 };
 
 /* ============ RENDER: PAL ============ */
-function renderPAL(){
+function renderPAL(query){
+  query = (query||'').toLowerCase();
   const reading = DATA.books.filter(b=>b.status==='reading');
   const readingTomes = currentlyReadingSagaTomes();
   const readingCard = document.getElementById('readingCard');
@@ -786,30 +790,32 @@ function renderPAL(){
   if(reading.length || readingTomes.length){
     readingCard.style.display='block';
     let rHtml = reading.map(b=>`
-      <div class="book-item">
+      <div class="book-item" style="cursor:pointer; align-items:flex-start;" onclick="openEditPalItem('book','${b.id}')">
         <div class="book-cover">${b.cover||'📖'}</div>
         <div class="book-info">
           <div class="t">${escapeHtml(b.title)}</div>
           <div class="a">${escapeHtml(b.author||'')}</div>
           <div class="book-meta">${b.genre?'<span class="pill">'+b.genre+'</span>':''}${b.pages?b.pages+' pages':''}</div>
+          ${readingProgressHTML(b.currentPage, b.pages, `updateBookProgress('${b.id}', this.value)`)}
         </div>
         <div style="display:flex; flex-direction:column; gap:6px;">
-          <button class="btn btn-soft btn-sm" onclick="openFinishReading('${b.id}')">Terminer</button>
-          <span class="link-del" onclick="deleteBook('${b.id}')" style="text-align:center;">Suppr.</span>
+          <button class="btn btn-soft btn-sm" onclick="event.stopPropagation(); openFinishReading('${b.id}')">Terminer</button>
+          <span class="link-del" onclick="event.stopPropagation(); deleteBook('${b.id}')" style="text-align:center;">Suppr.</span>
         </div>
       </div>
     `).join('');
     rHtml += readingTomes.map(t=>`
-      <div class="book-item">
+      <div class="book-item" style="cursor:pointer; align-items:flex-start;" onclick="openEditPalItem('tome','${t.tomeId}','${t.sagaId}')">
         <div class="book-cover">🔄</div>
         <div class="book-info">
           <div class="t">${escapeHtml(t.title)}</div>
           <div class="a">${escapeHtml(t.author||'')}</div>
           <div class="book-meta"><span class="pill">Saga</span>${t.genre?'<span class="pill">'+t.genre+'</span>':''}${t.pages?t.pages+' pages':''}</div>
+          ${readingProgressHTML(t.currentPage, t.pages, `updateTomeProgress('${t.sagaId}','${t.tomeId}', this.value)`)}
         </div>
         <div style="display:flex; flex-direction:column; gap:6px;">
-          <button class="btn btn-soft btn-sm" onclick="cycleTome('${t.sagaId}','${t.tomeId}')">Terminer</button>
-          <span class="link-del" onclick="deleteTome('${t.sagaId}','${t.tomeId}')" style="text-align:center;">Suppr.</span>
+          <button class="btn btn-soft btn-sm" onclick="event.stopPropagation(); cycleTome('${t.sagaId}','${t.tomeId}')">Terminer</button>
+          <span class="link-del" onclick="event.stopPropagation(); deleteTome('${t.sagaId}','${t.tomeId}')" style="text-align:center;">Suppr.</span>
         </div>
       </div>
     `).join('');
@@ -819,13 +825,16 @@ function renderPAL(){
     readingList.innerHTML = '';
   }
 
-  const pal = DATA.books.filter(b=>b.status==='pal').sort((a,b)=>(b.priority||0)-(a.priority||0));
-  const upcoming = upcomingSagaTomes();
-  document.getElementById('palCount').textContent = pal.length + upcoming.length;
+  const allPal = DATA.books.filter(b=>b.status==='pal').sort((a,b)=>(b.priority||0)-(a.priority||0));
+  const allUpcoming = upcomingSagaTomes();
+  document.getElementById('palCount').textContent = allPal.length + allUpcoming.length;
+  const pal = allPal.filter(b=> !query || b.title.toLowerCase().includes(query) || (b.author||'').toLowerCase().includes(query));
+  const upcoming = allUpcoming.filter(u=> !query || u.title.toLowerCase().includes(query) || (u.author||'').toLowerCase().includes(query));
   const list = document.getElementById('palList');
-  if(pal.length===0 && upcoming.length===0){ list.innerHTML = `<div class="empty-state"><span class="em">📚</span>Ta pile à lire est vide.<br>Ajoute un livre avec le bouton +</div>`; return; }
+  if(allPal.length===0 && allUpcoming.length===0){ list.innerHTML = `<div class="empty-state"><span class="em">📚</span>Ta pile à lire est vide.<br>Ajoute un livre avec le bouton +</div>`; return; }
+  if(pal.length===0 && upcoming.length===0){ list.innerHTML = `<div class="empty-state"><span class="em">🔍</span>Aucun résultat pour cette recherche.</div>`; return; }
   let html = pal.map(b=>`
-    <div class="book-item">
+    <div class="book-item" style="cursor:pointer;" onclick="openEditPalItem('book','${b.id}')">
       <div class="book-cover">${b.cover||'📕'}</div>
       <div class="book-info">
         <div class="t">${escapeHtml(b.title)}</div>
@@ -833,13 +842,13 @@ function renderPAL(){
         <div class="book-meta">${b.genre?'<span class="pill">'+b.genre+'</span>':''}${b.pages?b.pages+' pages':''} ${b.priority?'· '+'⭐'.repeat(b.priority):''}</div>
       </div>
       <div style="display:flex; flex-direction:column; gap:6px;">
-        <button class="btn btn-soft btn-sm" onclick="startReading('${b.id}')">Commencer</button>
-        <span class="link-del" onclick="deleteBook('${b.id}')" style="text-align:center;">Suppr.</span>
+        <button class="btn btn-soft btn-sm" onclick="event.stopPropagation(); startReading('${b.id}')">Commencer</button>
+        <span class="link-del" onclick="event.stopPropagation(); deleteBook('${b.id}')" style="text-align:center;">Suppr.</span>
       </div>
     </div>
   `).join('');
   html += upcoming.map(u=>`
-    <div class="book-item">
+    <div class="book-item" style="cursor:pointer;" onclick="openEditPalItem('tome','${u.tomeId}','${u.sagaId}')">
       <div class="book-cover">🔄</div>
       <div class="book-info">
         <div class="t">${escapeHtml(u.title)}</div>
@@ -847,8 +856,8 @@ function renderPAL(){
         <div class="book-meta"><span class="pill">Saga</span>${u.genre?'<span class="pill">'+u.genre+'</span>':''}${u.pages?u.pages+' pages':''}</div>
       </div>
       <div style="display:flex; flex-direction:column; gap:6px;">
-        <button class="btn btn-soft btn-sm" onclick="cycleTome('${u.sagaId}','${u.tomeId}')">Commencer</button>
-        <span class="link-del" onclick="deleteTome('${u.sagaId}','${u.tomeId}')" style="text-align:center;">Suppr.</span>
+        <button class="btn btn-soft btn-sm" onclick="event.stopPropagation(); cycleTome('${u.sagaId}','${u.tomeId}')">Commencer</button>
+        <span class="link-del" onclick="event.stopPropagation(); deleteTome('${u.sagaId}','${u.tomeId}')" style="text-align:center;">Suppr.</span>
       </div>
     </div>
   `).join('');
@@ -866,7 +875,7 @@ function currentlyReadingSagaTomes(){
   const rows = [];
   DATA.sagas.forEach(s=>{
     s.tomes.filter(t=>t.status==='en_cours').forEach(t=>{
-      rows.push({ sagaId: s.id, tomeId: t.id, title: s.name+' — '+t.title, author: s.author||'', genre: s.genre||'', pages: t.pages||0 });
+      rows.push({ sagaId: s.id, tomeId: t.id, title: s.name+' — '+t.title, author: t.author||s.author||'', genre: t.genre||s.genre||'', pages: t.pages||0, currentPage: t.currentPage||0 });
     });
   });
   return rows;
@@ -875,18 +884,51 @@ function upcomingSagaTomes(){
   const rows = [];
   DATA.sagas.forEach(s=>{
     s.tomes.filter(t=>t.status==='a_lire').forEach(t=>{
-      rows.push({ sagaId: s.id, tomeId: t.id, title: s.name+' — '+t.title, author: s.author||'', genre: s.genre||'', pages: t.pages||0 });
+      rows.push({ sagaId: s.id, tomeId: t.id, title: s.name+' — '+t.title, author: t.author||s.author||'', genre: t.genre||s.genre||'', pages: t.pages||0 });
     });
   });
   return rows;
 }
 function startReading(id){
   const b = DATA.books.find(x=>x.id===id); if(!b) return;
-  b.status='reading'; b.dateStarted=todayStr();
+  b.status='reading'; b.dateStarted=todayStr(); b.currentPage = b.currentPage||0;
   save(); renderAll();
   toast('📖 Bonne lecture avec "'+b.title+'" !');
 }
 window.startReading = startReading;
+function readingProgressHTML(currentPage, pages, onChangeCall){
+  currentPage = +currentPage || 0;
+  pages = +pages || 0;
+  if(!pages){
+    return `<div style="font-size:11px; color:var(--text-dim); margin-top:6px;">Ajoute le nombre de pages (✏️) pour suivre ta progression</div>`;
+  }
+  const pct = Math.max(0, Math.min(100, Math.round(currentPage/pages*100)));
+  return `
+    <div class="progress-bar" style="margin:8px 0 4px;"><div style="width:${pct}%"></div></div>
+    <div style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-dim);">
+      <span>Page</span>
+      <input type="number" min="0" max="${pages}" value="${currentPage}" style="width:56px; padding:3px 6px; border-radius:8px; border:1px solid rgba(0,0,0,0.15); font-family:inherit;" onclick="event.stopPropagation()" onchange="event.stopPropagation(); ${onChangeCall}">
+      <span>/ ${pages} · ${pct}%</span>
+    </div>
+  `;
+}
+function updateBookProgress(id, page){
+  const b = DATA.books.find(x=>x.id===id); if(!b) return;
+  let p = Math.round(+page)||0;
+  p = b.pages ? Math.max(0, Math.min(b.pages, p)) : Math.max(0, p);
+  b.currentPage = p;
+  save(); renderAll();
+}
+window.updateBookProgress = updateBookProgress;
+function updateTomeProgress(sagaId, tomeId, page){
+  const s = DATA.sagas.find(x=>x.id===sagaId); if(!s) return;
+  const t = s.tomes.find(x=>x.id===tomeId); if(!t) return;
+  let p = Math.round(+page)||0;
+  p = t.pages ? Math.max(0, Math.min(t.pages, p)) : Math.max(0, p);
+  t.currentPage = p;
+  save(); renderAll();
+}
+window.updateTomeProgress = updateTomeProgress;
 function deleteBook(id){
   DATA.books = DATA.books.filter(x=>x.id!==id); save(); renderAll();
 }
@@ -914,6 +956,7 @@ function openFinishReading(id){
     b.dateFinished = document.getElementById('frDate').value || todayStr();
     b.rating = starVal;
     b.notes = document.getElementById('frNotes').value.trim();
+    if(b.pages) b.currentPage = b.pages;
     save(); closeModal(); renderAll();
     const y = yearOf(b.dateFinished);
     toast(y===new Date().getFullYear()? '🎉 Terminé ! +1 sur ton objectif '+y : 'Livre terminé !');
@@ -935,12 +978,20 @@ function openRandomPick(){
       ${pick.genre?'<div style="margin-top:8px;"><span class="pill">'+pick.genre+'</span></div>':''}
     </div>
     <div class="modal-actions">
-      <button class="btn btn-ghost" style="flex:1;" id="rerollBtn">🔁 Retirer</button>
-      <button class="btn btn-primary" style="flex:2;" id="confirmPickBtn">Je commence !</button>
+      <button class="btn btn-primary" style="flex:1;" id="confirmPickBtn">📖 Je commence !</button>
+    </div>
+    <div class="modal-actions" style="margin-top:8px;">
+      <button class="btn btn-ghost btn-sm" style="flex:1;" id="rerollBtn">🔁 Une autre pioche</button>
+      <button class="btn btn-ghost btn-sm" style="flex:1; color:#c0304a;" id="removePickBtn">🗑️ Retirer de ma PAL</button>
     </div>
   `);
   document.getElementById('rerollBtn').onclick = openRandomPick;
   document.getElementById('confirmPickBtn').onclick = ()=>{ startReading(pick.id); closeModal(); confettiBurst(); };
+  document.getElementById('removePickBtn').onclick = ()=>{
+    deleteBook(pick.id);
+    closeModal();
+    toast('Livre retiré de ta PAL');
+  };
 }
 document.getElementById('btnRandomPick').onclick = openRandomPick;
 
@@ -968,7 +1019,7 @@ function sagaCardHTML(s){
     ${s.tomes.map(t=>`
       <div class="tome-row">
         <div class="tome-check ${t.status==='lu'?'done':t.status==='en_cours'?'current':''}" onclick="cycleTome('${s.id}','${t.id}')">${t.status==='lu'?'✓':t.status==='en_cours'?'…':''}</div>
-        <div class="tome-title ${t.status==='lu'?'done':''}">${escapeHtml(t.title)}${t.pages?' <span class="book-meta">('+t.pages+'p)</span>':''}</div>
+        <div class="tome-title ${t.status==='lu'?'done':''}">${escapeHtml(t.title)}${t.pages?' <span class="book-meta">('+t.pages+'p)</span>':''}${(t.author && t.author!==s.author)?' <span class="book-meta">· '+escapeHtml(t.author)+'</span>':''}</div>
         <span class="link-del" onclick="deleteTome('${s.id}','${t.id}')">✕</span>
       </div>
     `).join('')}
@@ -1002,8 +1053,10 @@ function cycleTome(sagaId, tomeId){
   const idx = order.indexOf(t.status);
   const wasLu = t.status==='lu';
   t.status = order[(idx+1)%order.length];
+  if(t.status==='en_cours'){ t.currentPage = t.currentPage||0; }
   if(t.status==='lu'){
     t.dateFinished = todayStr();
+    if(t.pages) t.currentPage = t.pages;
     if(!wasLu){
       confettiBurst();
       checkTierCelebration();
@@ -1027,10 +1080,13 @@ function setSagaStatus(id, value){
 }
 window.setSagaStatus = setSagaStatus;
 function addTomePrompt(sagaId){
+  const s = DATA.sagas.find(x=>x.id===sagaId); if(!s) return;
   openModal(`
     <h2>Nouveau tome</h2>
     <div class="field"><label>Titre du tome</label><input type="text" id="tomeTitle" placeholder="Ex: Tome 4 - Le réveil"></div>
     <div class="field"><label>Nombre de pages (optionnel)</label><input type="number" id="tomePages" min="0"></div>
+    <div class="field"><label>Auteur (si différent de "${escapeHtml(s.author||'?')}")</label><input type="text" id="tomeAuthor" placeholder="${escapeAttr(s.author||'Nom de l’auteur')}"></div>
+    <div class="field"><label>Genre (si différent de la saga)</label>${genreFieldHTML('tomeGenre', s.genre)}</div>
     <div class="modal-actions">
       <button class="btn btn-ghost" style="flex:1;" onclick="closeModal()">Annuler</button>
       <button class="btn btn-primary" style="flex:2;" id="tomeSave">Ajouter</button>
@@ -1039,8 +1095,11 @@ function addTomePrompt(sagaId){
   document.getElementById('tomeSave').onclick = ()=>{
     const title = document.getElementById('tomeTitle').value.trim();
     if(!title) return;
-    const s = DATA.sagas.find(x=>x.id===sagaId);
-    s.tomes.push({id:uid(), title, pages:+document.getElementById('tomePages').value||0, status:'a_lire', dateFinished:null, rating:0});
+    const tomeAuthor = document.getElementById('tomeAuthor').value.trim();
+    const tomeGenre = document.getElementById('tomeGenre').value;
+    s.tomes.push({id:uid(), title, pages:+document.getElementById('tomePages').value||0, status:'a_lire', dateFinished:null, rating:0,
+      author: (tomeAuthor && tomeAuthor!==s.author)? tomeAuthor : '',
+      genre: (tomeGenre && tomeGenre!==s.genre)? tomeGenre : ''});
     save(); closeModal(); renderAll();
   };
 }
@@ -1080,7 +1139,9 @@ function openEditFinished(refType, id, sagaId){
     ${isTome? `<div class="book-meta" style="margin-bottom:10px;">Tome de la saga <b>${escapeHtml(sagaCtx.name)}</b></div>`:''}
     <div class="field"><label>${isTome?'Titre du tome':'Titre'} *</label><input type="text" id="efTitle" value="${escapeAttr(obj.title)}"></div>
     ${!isTome? `<div class="field"><label>Auteur</label><input type="text" id="efAuthor" value="${escapeAttr(obj.author||'')}"></div>
-    <div class="field"><label>Genre</label>${genreFieldHTML('efGenre', obj.genre)}</div>` : ''}
+    <div class="field"><label>Genre</label>${genreFieldHTML('efGenre', obj.genre)}</div>` : `
+    <div class="field"><label>Auteur (si différent de "${escapeHtml(sagaCtx.author||'?')}")</label><input type="text" id="efAuthor" value="${escapeAttr(obj.author||'')}" placeholder="${escapeAttr(sagaCtx.author||'')}"></div>
+    <div class="field"><label>Genre (si différent de la saga)</label>${genreFieldHTML('efGenre', obj.genre||sagaCtx.genre)}</div>`}
     <div class="field"><label>Pages</label><input type="number" id="efPages" min="0" value="${obj.pages||''}"></div>
     <div class="field"><label>Date de fin de lecture</label><input type="date" id="efDate" value="${obj.dateFinished||todayStr()}"></div>
     <div class="field"><label>Ta note</label>${starInputHTML('efStars', obj.rating||0)}</div>
@@ -1103,6 +1164,11 @@ function openEditFinished(refType, id, sagaId){
     if(!isTome){
       obj.author = document.getElementById('efAuthor').value.trim();
       obj.genre = document.getElementById('efGenre').value;
+    } else {
+      const newAuthor = document.getElementById('efAuthor').value.trim();
+      const newGenre = document.getElementById('efGenre').value;
+      obj.author = (newAuthor && newAuthor!==sagaCtx.author)? newAuthor : '';
+      obj.genre = (newGenre && newGenre!==sagaCtx.genre)? newGenre : '';
     }
     save(); closeModal(); renderAll();
     toast('Modifications enregistrées ✅');
@@ -1116,6 +1182,64 @@ function openEditFinished(refType, id, sagaId){
 }
 window.openEditFinished = openEditFinished;
 document.getElementById('lusSearch').addEventListener('input', function(){ renderLus(this.value); });
+
+function openEditPalItem(refType, id, sagaId){
+  let book=null, tome=null, saga=null;
+  if(refType==='book'){
+    book = DATA.books.find(b=>b.id===id); if(!book) return;
+  } else {
+    saga = DATA.sagas.find(s=>s.id===sagaId); if(!saga) return;
+    tome = saga.tomes.find(t=>t.id===id); if(!tome) return;
+  }
+  const title = refType==='book'? book.title : tome.title;
+  const showPriority = refType==='book' && book.status==='pal';
+  openModal(`
+    <h2>✏️ Modifier "${escapeHtml(title)}"</h2>
+    ${refType==='tome'? `<div class="book-meta" style="margin-bottom:10px;">Tome de la saga <b>${escapeHtml(saga.name)}</b></div>`:''}
+    <div class="field"><label>${refType==='tome'?'Titre du tome':'Titre'} *</label><input type="text" id="epTitle" value="${escapeAttr(title)}"></div>
+    ${refType==='book'? `
+    <div class="field"><label>Auteur</label><input type="text" id="epAuthor" value="${escapeAttr(book.author||'')}"></div>
+    <div class="field"><label>Genre</label>${genreFieldHTML('epGenre', book.genre)}</div>` : `
+    <div class="field"><label>Auteur (si différent de "${escapeHtml(saga.author||'?')}")</label><input type="text" id="epAuthor" value="${escapeAttr(tome.author||'')}" placeholder="${escapeAttr(saga.author||'')}"></div>
+    <div class="field"><label>Genre (si différent de la saga)</label>${genreFieldHTML('epGenre', tome.genre||saga.genre)}</div>`}
+    <div class="field"><label>Pages</label><input type="number" id="epPages" min="0" value="${refType==='book'?(book.pages||''):(tome.pages||'')}"></div>
+    ${showPriority? `<div class="field" id="epPriorityField"><label>Priorité</label>${starInputHTML('epStars', book.priority||0)}</div>` : ''}
+    <div class="modal-actions">
+      <button class="btn btn-danger btn-sm" style="flex:1;" id="epDelete">Supprimer</button>
+      <button class="btn btn-primary" style="flex:2;" id="epSave">Enregistrer</button>
+    </div>
+  `);
+  let starVal = refType==='book'? (book.priority||0) : 0;
+  if(showPriority){ wireStarInput('epStars', starVal, v=> starVal=v); }
+  document.getElementById('epSave').onclick = ()=>{
+    const newTitle = document.getElementById('epTitle').value.trim();
+    if(!newTitle){ toast('Le titre est obligatoire'); return; }
+    if(refType==='book'){
+      book.title = newTitle;
+      book.author = document.getElementById('epAuthor').value.trim();
+      book.genre = document.getElementById('epGenre').value;
+      book.pages = +document.getElementById('epPages').value || 0;
+      if(showPriority) book.priority = starVal;
+    } else {
+      tome.title = newTitle;
+      tome.pages = +document.getElementById('epPages').value || 0;
+      const newAuthor = document.getElementById('epAuthor').value.trim();
+      const newGenre = document.getElementById('epGenre').value;
+      tome.author = (newAuthor && newAuthor!==saga.author)? newAuthor : '';
+      tome.genre = (newGenre && newGenre!==saga.genre)? newGenre : '';
+    }
+    save(); closeModal(); renderAll();
+    toast('Modifications enregistrées ✅');
+  };
+  document.getElementById('epDelete').onclick = ()=>{
+    if(refType==='book'){ DATA.books = DATA.books.filter(b=>b.id!==id); }
+    else { saga.tomes = saga.tomes.filter(t=>t.id!==id); }
+    save(); closeModal(); renderAll();
+    toast('Livre supprimé');
+  };
+}
+window.openEditPalItem = openEditPalItem;
+document.getElementById('palSearch').addEventListener('input', function(){ renderPAL(this.value); });
 
 /* ============ ADD BOOK / SAGA FLOW ============ */
 document.getElementById('fabAdd').onclick = ()=>{
@@ -1182,6 +1306,17 @@ function openBookForm(status){
   document.getElementById('bfSagaYes').onclick = ()=>{ sagaMode=true; refreshSagaUI(); };
   refreshSagaUI();
 
+  // Si le nom saisi correspond à une saga déjà existante, on pré-remplit auteur/genre à partir
+  // de cette saga (pratique quand la plupart des tomes ont le même auteur), mais ça reste
+  // modifiable au cas par cas (ex: saga écrite par plusieurs autrices différentes).
+  document.getElementById('bfSagaName').addEventListener('input', function(){
+    const match = DATA.sagas.find(s=> s.name.toLowerCase()===this.value.trim().toLowerCase());
+    if(match){
+      if(match.author) document.getElementById('bfAuthor').value = match.author;
+      if(match.genre) document.getElementById('bfGenre').value = match.genre;
+    }
+  });
+
   document.getElementById('bfSave').onclick = ()=>{
     const title = document.getElementById('bfTitle').value.trim();
     if(!title){ toast('Le titre est obligatoire'); return; }
@@ -1191,14 +1326,20 @@ function openBookForm(status){
       const sagaName = document.getElementById('bfSagaName').value.trim();
       if(!sagaName){ toast('Le nom de la saga est obligatoire'); return; }
       const sagaStatus = document.getElementById('bfSagaStatus').value;
+      const tomeAuthor = document.getElementById('bfAuthor').value.trim();
+      const tomeGenre = document.getElementById('bfGenre').value;
       let saga = DATA.sagas.find(s=> s.name.toLowerCase()===sagaName.toLowerCase());
       if(!saga){
-        saga = { id: uid(), name: sagaName, author: document.getElementById('bfAuthor').value.trim(), genre: document.getElementById('bfGenre').value, cover:'🔄', status: sagaStatus, tomes: [] };
+        saga = { id: uid(), name: sagaName, author: tomeAuthor, genre: tomeGenre, cover:'🔄', status: sagaStatus, tomes: [] };
         DATA.sagas.push(saga);
       } else {
         saga.status = sagaStatus;
       }
-      const tome = { id: uid(), title, pages: +document.getElementById('bfPages').value||0, status: tomeStatus, dateFinished: null, rating: 0 };
+      // On ne garde l'auteur/genre au niveau du tome que s'ils diffèrent de ceux de la saga
+      // (permet des sagas où plusieurs autrices/genres différents se mélangent selon le tome).
+      const tome = { id: uid(), title, pages: +document.getElementById('bfPages').value||0, status: tomeStatus, dateFinished: null, rating: 0,
+        author: (tomeAuthor && tomeAuthor!==saga.author)? tomeAuthor : '',
+        genre: (tomeGenre && tomeGenre!==saga.genre)? tomeGenre : '' };
       if(isLu){
         tome.dateFinished = document.getElementById('bfDate').value || todayStr();
         tome.rating = starVal;
@@ -1341,7 +1482,7 @@ function renderAll(){
   renderTodayCard();
   renderCalendar();
   renderObjectifs();
-  renderPAL();
+  renderPAL(document.getElementById('palSearch').value);
   renderSagas();
   renderLus(document.getElementById('lusSearch').value);
 }
